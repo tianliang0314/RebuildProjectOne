@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="Utf-8"?>
+<config>
+  <item name="ComputeShader" value="Weldline/ComputeShader" comment="计算着色器" />
+  <item name="MainTex" value="Weldline/BaseTexture/MainTex" comment="表面色贴图" />
+  <item name="EdgeTex" value="Weldline/BaseTexture/EdgeTex" comment="表面色贴图" />
+  <item name="TemperatureColorMap" value="Weldline/BaseTexture/TemperatureColorMap" comment="温度颜色映射图" />
+  <item name="WarmingMap" value="Weldline/BaseTexture/WarmingMap" comment="升温映射图" />  
+  <item name="CoolingMap" value="Weldline/BaseTexture/CoolingMap" comment="降温映射图" />
+  <item name="MaxTemperatureMap" value="Brush/BaseTexture/MaxTemperatureMap" comment="最大温度映射图" />
+  <item name="TextureWidth" value="2048" comment="焊缝数据贴图的分辨率" />
+  <item name="TextureHeight" value="2048" comment="焊缝数据贴图的分辨率" />
+  <item name="PlaneWidth" value="1.18" comment="实体表面的物理宽" />  
+  <item name="PlaneHeight" value="1.18" comment="实体表面的物理高" />
+  <item name="Size" value="20" comment="熔池大小" />
+  <item name="Strength" value="0.015" comment="熔池升高速度" />
+  <item name="FluctuateRange" value="30" comment="波动范围" />
+  <item name="WarmingSpeed" value="4" comment="升温速度" />
+  <item name="CoolingSpeed" value="4" comment="降温速度" />
+  <item name="MaxHeight" value="0.1" comment="最大高度" />
+  <item name="SmoothRatio" value="20" comment="平滑系数" />
+</config>

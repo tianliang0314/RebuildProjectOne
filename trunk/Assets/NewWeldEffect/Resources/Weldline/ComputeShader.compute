@@ -1,0 +1,229 @@
+﻿
+// 温度、高度、法线计算
+#pragma kernel CSMain
+// 重置数据
+#pragma kernel CSReset
+// 缺陷计算
+#pragma kernel CSDefect
+// 调试函数
+#pragma kernel CSTest
+
+// 激活
+int activation;
+
+// 纹理宽高
+uint texture_width;
+uint texture_height;
+
+// 温度发射点
+float pos_x;
+float pos_y;
+
+// 熔池模拟点
+float pos_pool_x;
+float pos_pool_y;
+
+// 影响范围
+float pos_r;
+float pos_pool_r;
+
+// 熔滴初始范围、填充高度
+float molten_drop_r;
+float molten_drop_h;
+float max_height;
+
+// 纹理与实体表面比例
+float width_scale;
+float height_scale;
+
+// 升温速度、温度系数、距离系数
+float warming_speed;
+float warming_tem_coe;
+float warming_dis_coe;
+
+// 降温速度、温度系数、距离系数
+float cooling_speed;
+float cooling_tem_coe;
+float cooling_dis_coe;
+
+// 平滑系数
+float smooth_ratio;
+
+// 用于逻辑计算的数据纹理, r:高度, g:温度, b:时间, a:掩码
+Texture2D<float4> data_in;
+RWTexture2D<float4> data_out;
+
+// 法线贴图
+Texture2D<float4> normal_in;
+RWTexture2D<float4> normal_out;
+
+// 升温、降温、最高温度映射图
+Texture2D<float4> warming_map;
+Texture2D<float4> cooling_map;
+Texture2D<float4> max_tem_map;
+
+// 调试数据
+struct DebugStruct
+{
+	int i;
+	float f;
+	float3 f3;
+	float4 f4;
+};
+RWStructuredBuffer<DebugStruct> debug_buffer;
+
+[numthreads(32,32,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+	float4 center = data_in[id.xy];
+	
+	float4 up = data_in[id.xy + uint2(0,1)];
+	float4 down = data_in[id.xy + uint2(0,-1)];
+	float4 left = data_in[id.xy + uint2(-1,0)];
+	float4 right = data_in[id.xy + uint2(1,0)];
+	
+	float4 left_up = data_in[id.xy + uint2(-1,1)];
+	float4 right_up = data_in[id.xy + uint2(1,1)];
+	float4 left_down = data_in[id.xy + uint2(-1,-1)];
+	float4 right_down = data_in[id.xy + uint2(1,-1)];
+	
+	// 温度计算
+	float cr = (pos_x - id.x)*(pos_x - id.x) + (pos_y - id.y)*(pos_y - id.y);
+	float mr = pos_r * pos_r;
+	
+	float pcr = (pos_pool_x - id.x)*(pos_pool_x - id.x) + (pos_pool_y - id.y)*(pos_pool_y - id.y);
+	float pmr = pos_pool_r * pos_pool_r;
+	
+	if(activation == 1 && cr < mr)
+	{
+		float d = lerp(0.6, 1.3, (mr - cr)/mr);
+		float t = center.g + d * warming_speed;
+		
+		if(t > d)
+		{
+			t = d;
+		}
+		if(center.g < t)
+		{
+			center.g = t;
+		}
+		else
+		{
+			center.g -= cooling_speed;
+		}
+	}
+	else if(activation == 1 && pcr < pmr)
+	{
+		float t = center.g - 0.1 * cooling_speed;
+		center.g = t;
+		if(center.g < 0.01) center.g = 0.01;
+	}
+	else
+	{
+		float t = center.g - cooling_speed;
+		center.g = t;
+		if(center.g < 0.01) center.g = 0.01;
+	}
+	
+	// 高度计算
+	if(center.g > 0.7)
+	{
+		center.r += molten_drop_h;
+		if(center.r>max_height) center.r = max_height;
+		center.r = (center.r * 30.0 + up.r + down.r + left.r + right.r)/(30.0 + 4.0);
+
+		//center.r = (center.r * smooth_ratio + up.r + down.r + left.r + right.r)/(smooth_ratio + 4.0);
+		//center.r = (center.r * smooth_ratio + up.r + down.r + left.r + right.r + left_up.r + right_up.r + left_down.r + right_down.r)/(smooth_ratio + 8.0);
+	}
+	else if(center.g > 0.65)
+	{
+		center.r = (center.r * 40.0 + up.r + down.r + left.r + right.r)/(40.0 + 4.0);
+
+		//center.r = (center.r * smooth_ratio * 2 + up.r + down.r + left.r + right.r)/(smooth_ratio * 2 + 4.0);
+		//center.r = (center.r * smooth_ratio * 2 + up.r + down.r + left.r + right.r + left_up.r + right_up.r + left_down.r + right_down.r)/(smooth_ratio + 8.0);
+	}
+	else if(center.g > 0.6)
+	{
+		//center.r = (center.r * 12 + up.r + down.r + left.r + right.r + left_up.r + right_up.r + left_down.r + right_down.r)/20.0;
+	}
+	
+	// 时间计算
+	center.b = 0;
+	
+	// 掩码计算
+	center.a = 0;
+	
+    data_out[id.xy] = center;
+	
+	
+	// 法线计算
+	float4 normal = normal_in[id.xy];
+	//if(center.g > 0.1)
+	{
+		float a1 = 0;
+		float a2 = height_scale;
+		float a3 = center.r - up.r;
+		
+		float b1 = 0;
+		float b2 = width_scale;
+		float b3 = center.r - right.r;
+		
+		float3 vup = float3(a1, a2, -a3);
+		float3 vright = float3(b2, b1, -b3);
+		
+		normal.rgb = normalize(-cross(vup, vright));
+		
+		//normal.rgb = normalize(float3(0,0,1));
+	}
+	normal_out[id.xy] = normal;
+}
+
+[numthreads(32,32,1)]
+void CSSmooth (uint3 id : SV_DispatchThreadID)
+{
+	float4 up = data_in[id.xy + uint2(0,1)];
+	float4 down = data_in[id.xy + uint2(0,-1)];
+	float4 center = data_in[id.xy];
+	float4 left = data_in[id.xy + uint2(-1,0)];
+	float4 right = data_in[id.xy + uint2(1,0)];
+	
+	center.r = (center.r + up.r + down.r + left.r + right.r)/5.0;
+	
+    data_out[id.xy] = center;
+}
+
+[numthreads(32,32,1)]
+void CSReset (uint3 id : SV_DispatchThreadID)
+{
+    data_out[id.xy] = float4(0,0,0,0);
+    normal_out[id.xy] = float4(0,0,0,0);
+}
+
+[numthreads(32,32,1)]
+void CSDefect (uint3 id : SV_DispatchThreadID)
+{
+	
+}
+
+[numthreads(1,1,1)]
+void CSTest (uint3 id : SV_DispatchThreadID)
+{
+	
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
